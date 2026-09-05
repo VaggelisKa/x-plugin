@@ -1,0 +1,6 @@
+node_modules
+dist
+package-lock.json
+plugins/x-plugin/.claude-plugin/plugin.json
+plugins/x-plugin/.codex-plugin/plugin.json
+plugins/x-plugin/.mcp.json

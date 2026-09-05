@@ -1,0 +1,50 @@
+{
+  "name": "@vaggeliska/x-plugin",
+  "version": "0.1.0",
+  "description": "Simple plugin to connect your X account to the agent of your choice",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "check": "npm run typecheck && npm test",
+    "prepack": "npm run build",
+    "start": "node dist/cli.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VaggelisKa/x-plugin.git"
+  },
+  "keywords": [],
+  "author": "VaggelisKa",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/VaggelisKa/x-plugin/issues"
+  },
+  "homepage": "https://github.com/VaggelisKa/x-plugin#readme",
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^26.4.1",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "bin": {
+    "x-plugin": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "x": {
+      "command": "x-plugin",
+      "args": [
+        "serve"
+      ]
+    }
+  }
+}
