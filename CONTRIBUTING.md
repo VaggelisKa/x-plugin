@@ -1,6 +1,6 @@
 # Contributing
 
-Use Node.js 22.18+ and run `npm ci`, `npm run check`, and `npm run format:check` before opening a pull request. Tests must use synthetic credentials and mocked X responses; live integration testing is opt-in and must never run in public CI.
+Use Node.js 24 (`nvm use`) and run `npm ci`, `npm run check`, and `npm run format:check` before opening a pull request. Tests must use synthetic credentials and mocked X responses; live integration testing is opt-in and must never run in public CI.
 
 Keep X API logic independent from MCP transports. Keep changes compatible with the shared Claude Code/Codex plugin. Generate manifests with `node scripts/configure-plugins.mjs` after changing metadata.
 

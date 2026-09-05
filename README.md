@@ -6,7 +6,7 @@ Connect your X account to Claude Code, Codex, or another MCP client. Search post
 
 ## Get started
 
-Requires Node.js **22.18+**, npm, and an X developer account with API access/credits. No Anthropic or OpenAI API key is required by this plugin.
+Requires Node.js **24+**, npm, and an X developer account with API access/credits. No Anthropic or OpenAI API key is required by this plugin.
 
 ```sh
 git clone https://github.com/VaggelisKa/x-plugin.git
@@ -164,7 +164,7 @@ npm run format:check
 npm pack --dry-run
 ```
 
-Tests use synthetic tokens and mocked X responses. Stdio tests spawn the actual CLI and exercise both modern metadata and legacy initialization. HTTP tests exercise loopback authentication and a real transport request. CI runs on Node 22 and 24.
+Tests use synthetic tokens and mocked X responses. Stdio tests spawn the actual CLI and exercise both modern metadata and legacy initialization. HTTP tests exercise loopback authentication and a real transport request. CI runs on Node 24.
 
 See [architecture](docs/architecture.md) for boundaries and protocol decisions, and [contributing](CONTRIBUTING.md) for the contribution workflow. MIT licensed; not affiliated with X, Anthropic, or OpenAI.
 

@@ -10,7 +10,7 @@ async function main() {
   const store = new CredentialStore();
   if (args.length === 0 || args[0] === 'help' || args[0] === '--help') {
     process.stdout.write(
-      `x-plugin (Node.js >=22.18)\n\nCommands:\n  auth login [--write]   Connect an X Native App using X_CLIENT_ID\n  auth status           Show connection status without credentials\n  auth logout           Remove local credentials (revoke in X settings separately)\n  serve                 Serve MCP over stdio\n  serve --http          Serve MCP at http://127.0.0.1:8788/mcp\n\nEnvironment:\n  X_CLIENT_ID           Native App OAuth client ID for login\n  X_ALLOW_WRITE=true    Expose sending tools (requires login --write)\n  X_PLUGIN_CONFIG_DIR   Override credential directory\n  X_MCP_HTTP_TOKEN      Separate 32+ character secret for HTTP mode\n  X_MCP_PORT            HTTP port (default 8788)\n`,
+      `x-plugin (Node.js >=24)\n\nCommands:\n  auth login [--write]   Connect an X Native App using X_CLIENT_ID\n  auth status           Show connection status without credentials\n  auth logout           Remove local credentials (revoke in X settings separately)\n  serve                 Serve MCP over stdio\n  serve --http          Serve MCP at http://127.0.0.1:8788/mcp\n\nEnvironment:\n  X_CLIENT_ID           Native App OAuth client ID for login\n  X_ALLOW_WRITE=true    Expose sending tools (requires login --write)\n  X_PLUGIN_CONFIG_DIR   Override credential directory\n  X_MCP_HTTP_TOKEN      Separate 32+ character secret for HTTP mode\n  X_MCP_PORT            HTTP port (default 8788)\n`,
     );
     return;
   }

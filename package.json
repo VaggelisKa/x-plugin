@@ -31,13 +31,13 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
-    "@types/node": "^26.4.1",
+    "@types/node": "^24.13.3",
     "prettier": "^3.9.6",
     "typescript": "^7.0.2"
   },
   "private": true,
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=24.0.0"
   },
   "bin": {
     "x-plugin": "dist/cli.js"
