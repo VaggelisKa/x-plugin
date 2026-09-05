@@ -15,4 +15,5 @@ jobs:
       - run: npm run check
       - run: npm run format:check
       - run: node scripts/configure-plugins.mjs && git diff --exit-code -- plugins
-      - run: npm pack --dry-run
+      # npm run check already builds dist; skip the prepack rebuild here.
+      - run: npm pack --dry-run --ignore-scripts
