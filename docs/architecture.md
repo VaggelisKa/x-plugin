@@ -23,6 +23,10 @@ Use official `@modelcontextprotocol/server` and `@modelcontextprotocol/node` v2.
 
 No sampling, model API dependency, background polling, or task extension is needed for this version. Tool catalogs are fixed per process configuration. DM content is untrusted data and must not be interpreted as instructions.
 
+## Post tools
+
+`src/posts.ts` defines shared Zod schemas used by the MCP layer and X client, so direct client calls also validate filters before network access. Recent search maps the public `pagination_token` to X’s `next_token`; user timelines retain `pagination_token`. Both return one bounded page. Search syntax is passed through unchanged, with a standard-access 512-character limit. These read-only tools reuse existing OAuth read scopes.
+
 ## Authentication and sending
 
 X Native App OAuth uses S256 PKCE and random state, a five-minute login deadline, and exact loopback callback matching. Read access requests `tweet.read users.read dm.read offline.access`; `--write` adds `dm.write`. The CLI, not an MCP tool, handles login so credentials stay outside model context.

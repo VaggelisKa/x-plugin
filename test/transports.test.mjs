@@ -58,7 +58,7 @@ test('modern stdio discovers read-only tools and returns a safe missing-auth err
   const c = processClient(t);
   const list = await c.call('tools/list', { _meta: meta });
   assert.ok(list.result, JSON.stringify(list));
-  assert.equal(list.result.tools.length, 4);
+  assert.equal(list.result.tools.length, 7);
   assert.ok(!list.result.tools.some((x) => x.name === 'x_send_dm'));
   const result = await c.call('tools/call', { _meta: meta, name: 'x_get_me', arguments: {} });
   assert.equal(result.result.isError, true);

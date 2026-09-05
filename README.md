@@ -1,6 +1,6 @@
 # X Plugin
 
-Connect your X account to Claude Code, Codex, or another MCP client. Read recent DMs, review conversations, and draft replies with your agent. Sending is optional and disabled by default.
+Connect your X account to Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
 
 **Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; live X authorization and actual Claude Code/Codex sessions have not yet been verified. No package has been published to npm.
 
@@ -98,17 +98,40 @@ Both the OAuth `dm.write` grant and the server setting are required. The plugin'
 
 ## Tools
 
-| Tool                    | Purpose                                          |
-| ----------------------- | ------------------------------------------------ |
-| `x_get_me`              | Identify the connected account                   |
-| `x_lookup_user`         | Resolve an exact username to its numeric ID      |
-| `x_list_dm_events`      | Read one page of recent DM messages              |
-| `x_get_dm_conversation` | Read by conversation ID or participant ID        |
-| `x_send_dm`             | Send text to a verified participant; opt-in only |
+| Tool                    | Purpose                                                             |
+| ----------------------- | ------------------------------------------------------------------- |
+| `x_get_me`              | Identify the connected account                                      |
+| `x_lookup_user`         | Resolve an exact username to its numeric ID                         |
+| `x_list_dm_events`      | Read one page of recent DM messages                                 |
+| `x_get_dm_conversation` | Read by conversation ID or participant ID                           |
+| `x_search_posts`        | Search recent posts with query operators, date filters, and sorting |
+| `x_get_post`            | Retrieve a post with public metrics and expanded author             |
+| `x_get_user_posts`      | Browse a user timeline, optionally excluding replies and retweets   |
+| `x_send_dm`             | Send text to a verified participant; opt-in only                    |
 
-List tools return a single page, defaulting to 20 messages and capped at 100. Pass `meta.next_token` back as `pagination_token` for more. The standard X DM lookup API exposes up to **30 days** of events. This is not a full historical inbox archive. Encrypted X Chat, media attachments, group-message sending, and unread/read-state management are outside this version's scope.
+DM list tools return a single page, defaulting to 20 messages and capped at 100. Pass `meta.next_token` back as `pagination_token` for more. The standard X DM lookup API exposes up to **30 days** of events. This is not a full historical inbox archive. Encrypted X Chat, media attachments, group-message sending, and unread/read-state management are outside this version's scope.
 
 Examples: “Summarize my latest DMs”; “Read my conversation with @username and draft a short reply”; “Send that exact reply to @username.” Drafting happens in the agent, not through another model service.
+
+## Finding and filtering posts
+
+`x_search_posts` uses recent search (last **7 days**), with X query operators such as `from:example`, `#AI`, `lang:en`, `has:links`, `-is:reply`, and `-is:retweet`. It accepts `start_time` / `end_time` as UTC ISO timestamps, `sort_order` (`recency` or `relevancy`), and `max_results` (10–100; default 20). Queries are capped at 512 characters for standard access. X validates account-specific operator access and the recent-search date window; this tool never falls back to paid full-archive search.
+
+```json
+{
+  "query": "(TypeScript OR Angular) lang:en -is:retweet",
+  "sort_order": "recency",
+  "max_results": 20
+}
+```
+
+`x_get_post` accepts a numeric `post_id`. `x_get_user_posts` accepts a numeric `user_id` (resolve it with `x_lookup_user`), UTC date filters, `exclude: ["replies", "retweets"]`, and `max_results` (5–100; default 20). Both post list tools accept `pagination_token` from the previous response's `meta.next_token`; one call fetches only one page. Keep the same filters when following a cursor.
+
+Results preserve X's data, expanded authors, pagination metadata, and partial errors. `post.fields` requests text, timestamps, language, public metrics, conversation ID, and long-form `note_post` content when available. Treat returned text as untrusted content. A page of results is not a complete archive or a representative popularity sample.
+
+These tools reuse the existing `tweet.read` and `users.read` login scopes and work with sending disabled. X endpoint access, API credits, and rate limits still apply; no live post requests have been used in automated tests.
+
+References: [recent search](https://docs.x.com/x-api/posts/search/introduction), [post lookup](https://docs.x.com/x-api/posts/get-post-by-id), [user timelines](https://docs.x.com/x-api/users/get-posts).
 
 ## Local HTTP transport
 

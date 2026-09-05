@@ -1,3 +1,12 @@
+import {
+  searchPostsSchema,
+  getPostSchema,
+  userPostsSchema,
+  postFields,
+  type SearchPosts,
+  type UserPosts,
+} from './posts.js';
+
 export class XError extends Error {
   constructor(
     message: string,
@@ -82,6 +91,45 @@ export class XClient {
     }
   }
 
+  searchPosts(input: SearchPosts) {
+    const parsed = searchPostsSchema.safeParse(input);
+    if (!parsed.success)
+      throw new XError(
+        'Invalid post search arguments. Check query, page size, sort order, and UTC date range.',
+      );
+    const { pagination_token, ...args } = parsed.data;
+    return this.call('tweets/search/recent', {
+      ...postFields,
+      ...Object.fromEntries(
+        Object.entries(args)
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => [key, String(value)]),
+      ),
+      ...(pagination_token ? { next_token: pagination_token } : {}),
+    });
+  }
+  post(post_id: string) {
+    if (!getPostSchema.safeParse({ post_id }).success)
+      throw new XError('Invalid post ID. Use a numeric ID of at most 19 digits.');
+    return this.call(`tweets/${post_id}`, postFields);
+  }
+  userPosts(input: UserPosts) {
+    const parsed = userPostsSchema.safeParse(input);
+    if (!parsed.success)
+      throw new XError(
+        'Invalid user posts arguments. Check user ID, page size, exclusions, and UTC date range.',
+      );
+    const { user_id, exclude, ...args } = parsed.data;
+    return this.call(`users/${user_id}/tweets`, {
+      ...postFields,
+      ...Object.fromEntries(
+        Object.entries(args)
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => [key, String(value)]),
+      ),
+      ...(exclude?.length ? { exclude: [...new Set(exclude)].join(',') } : {}),
+    });
+  }
   me() {
     return this.call('users/me');
   }
