@@ -41,6 +41,14 @@ Sending is absent from the default tool catalog and rejected by the client unles
 
 Automated tests cover X request shapes, cursor handling, error redaction, refresh rotation, local OAuth state checks, write gating, and modern/legacy transport behavior. Actual Claude Code and Codex sessions, real X OAuth/API access, encrypted X Chat behavior, Windows credential protection, and marketplace installation remain unverified.
 
-Next milestones: live account smoke test, host-specific end-to-end checks, portable credential storage, release packaging and npm ownership, then public HTTP OAuth. Do not describe the package as published or fully client-verified before those gates pass.
+Next milestones: live account smoke test, host-specific installation/end-to-end checks, portable credential storage, release ownership, then public HTTP OAuth. Do not describe the package as published or fully client-verified before those gates pass.
 
 Sources: [MCP release](https://blog.modelcontextprotocol.io/posts/2026-07-28/), [X OAuth](https://docs.x.com/fundamentals/authentication/oauth-2-0/authorization-code), [X DM lookup](https://docs.x.com/x-api/direct-messages/lookup/introduction), [Claude plugins](https://code.claude.com/docs/en/plugins-reference), [Codex MCP](https://developers.openai.com/codex/mcp/).
+
+## Repository installation
+
+The repository has a Claude catalog at `.claude-plugin/marketplace.json` and a Codex catalog at `.agents/plugins/marketplace.json`. Both point at `plugins/x-plugin`. `npm run build:plugin` regenerates catalogs/manifests and bundles the CLI and runtime dependencies with pinned esbuild into a tracked CommonJS file. CommonJS makes bundled dynamic Node builtin imports work without external package resolution. The runtime checks Node 24 before loading dependencies. The bundle includes full dependency license/notice files, and build verification rejects external npm imports.
+
+Claude resolves `${CLAUDE_PLUGIN_ROOT}` in `.mcp.json`. Codex uses its inline `mcpServers` object with `cwd: "."`, which its loader resolves relative to the installed plugin root. Keeping the configurations separate avoids assuming Claude's variable interpolation works in Codex. Neither startup path installs packages, builds code, writes into the plugin cache, or requires `npm link`.
+
+CI rebuilds the tracked artifacts and checks for drift, then copies the plugin into an unrelated temporary directory (including spaces in its path) and starts each configured MCP command with empty PATH and global module search disabled. These tests exercise the bundle and documented host path semantics, not a real Claude/Codex installation. OAuth still runs explicitly in the local CLI, outside MCP; plugin discovery must not trigger login.

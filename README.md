@@ -4,7 +4,37 @@ Connect your X account to Claude Code, Codex, or another MCP client. Search post
 
 **Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; live X authorization and actual Claude Code/Codex sessions have not yet been verified. No package has been published to npm.
 
-## Get started
+## Install as a plugin
+
+Requires Node.js **24+** available to your local agent, Git, and an X developer app. The plugin includes its runtime and dependencies: no npm install, build, or global `x-plugin` command is required.
+
+Once this PR is merged, add the repository marketplace and install:
+
+### Claude Code
+
+Run inside Claude Code:
+
+```text
+/plugin marketplace add VaggelisKa/x-plugin
+/plugin install x-plugin@x-plugin
+```
+
+### Codex
+
+```sh
+codex plugin marketplace add VaggelisKa/x-plugin
+codex plugin add x-plugin@x-plugin
+```
+
+Start a new agent session after installing. Ask it to connect your X account; the [bundled setup guide](plugins/x-plugin/README.md) explains how to run the installed CLI and complete browser authorization. You still need an X Native App client ID and API access. Installing the plugin does not grant X access or enable sending.
+
+Before merge, test a local checkout with `/plugin marketplace add /absolute/path/to/x-plugin` in Claude Code or `codex plugin marketplace add /absolute/path/to/x-plugin` in Codex, then use the same install command. No global CLI setup is needed for this path either.
+
+The catalogs and isolated plugin runtime are tested in CI. Actual host installation/login sessions remain unverified. These instructions target local clients with plugin support; this is not a hosted ChatGPT connector or a listing in either official public directory.
+
+Installation conventions: [Claude marketplaces](https://code.claude.com/docs/en/plugin-marketplaces), [Codex packaging](https://developers.openai.com/plugins/build/plugins).
+
+## Develop locally
 
 Requires Node.js **24+**, npm, and an X developer account with API access/credits. No Anthropic or OpenAI API key is required by this plugin.
 
@@ -41,9 +71,10 @@ Status reports stored credentials and expiry, not a live connectivity check. Ask
 
 ### Claude Code
 
-From the checkout, load the complete plugin (MCP tools plus the DM skill):
+From the checkout, regenerate and load the complete plugin (MCP tools plus the DM skill):
 
 ```sh
+npm run build:plugin
 claude --plugin-dir ./plugins/x-plugin
 ```
 
@@ -71,7 +102,7 @@ command = "x-plugin"
 args = ["serve"]
 ```
 
-The complete Codex plugin manifest is in `plugins/x-plugin/.codex-plugin/plugin.json`, with the shared skill alongside it. It is prepared for plugin import; marketplace installation is not configured or tested in this first version. MCP registration above works independently of marketplace packaging. Read the bundled `plugins/x-plugin/skills/x-dms/SKILL.md` when using only the MCP registration.
+The complete plugin includes the shared skill and a bundled runtime. Use the marketplace installation above for that experience. The MCP-only registration here uses your development checkout; read the bundled `plugins/x-plugin/skills/x-dms/SKILL.md` when using it. Do not enable both registrations in the same host session.
 
 ### Enable sending
 

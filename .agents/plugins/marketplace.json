@@ -1,0 +1,20 @@
+{
+  "name": "x-plugin",
+  "interface": {
+    "displayName": "X Plugin"
+  },
+  "plugins": [
+    {
+      "name": "x-plugin",
+      "source": {
+        "source": "local",
+        "path": "./plugins/x-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -4,6 +4,7 @@
   "description": "Simple plugin to connect your X account to the agent of your choice",
   "scripts": {
     "build": "tsc",
+    "build:plugin": "node scripts/configure-plugins.mjs && node scripts/build-plugin.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
     "check": "npm run typecheck && npm test",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^24.13.3",
+    "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "typescript": "^7.0.2"
   },

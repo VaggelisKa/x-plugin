@@ -12,8 +12,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run build:plugin
+      - run: git diff --exit-code -- plugins .claude-plugin .agents
       - run: npm run check
       - run: npm run format:check
-      - run: node scripts/configure-plugins.mjs && git diff --exit-code -- plugins
       # npm run check already builds dist; skip the prepack rebuild here.
       - run: npm pack --dry-run --ignore-scripts

@@ -1,0 +1,14 @@
+{
+  "name": "x-plugin",
+  "owner": {
+    "name": "VaggelisKa"
+  },
+  "plugins": [
+    {
+      "name": "x-plugin",
+      "source": "./plugins/x-plugin",
+      "description": "Connect your X account to your agent: search posts, read DMs, draft replies, and optionally send messages.",
+      "version": "0.1.0"
+    }
+  ]
+}

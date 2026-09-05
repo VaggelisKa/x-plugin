@@ -8,7 +8,16 @@
   "repository": "https://github.com/VaggelisKa/x-plugin",
   "license": "MIT",
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": {
+    "x": {
+      "command": "node",
+      "args": [
+        "runtime/x-plugin.cjs",
+        "serve"
+      ],
+      "cwd": "."
+    }
+  },
   "interface": {
     "displayName": "X Plugin",
     "shortDescription": "Search posts and manage X direct messages.",
@@ -19,6 +28,8 @@
       "Read",
       "Write"
     ],
-    "defaultPrompt": "Review my recent X DMs and help me draft replies."
+    "defaultPrompt": [
+      "Review my recent X DMs and help me draft replies."
+    ]
   }
 }

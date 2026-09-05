@@ -7,3 +7,5 @@ Keep X API logic independent from MCP transports. Keep changes compatible with t
 Never commit credentials, captured DMs, private callback URLs, or account exports. Reports of uncertain DM delivery must not trigger automatic resend logic.
 
 The npm package is intentionally private until naming/ownership and release verification are completed. Opening a pull request does not publish the package or contact any X user.
+
+For changes affecting the CLI, MCP dependencies, or plugin metadata, run `npm run build:plugin` and commit the regenerated `plugins/x-plugin/runtime/x-plugin.cjs`, dependency notices, and manifests/catalogs. The plugin runtime is deliberately tracked so GitHub installations need no build step. CI regenerates it from the lockfile and rejects drift, then tests a copied plugin with no project dependencies or global CLI available. Do not edit generated files directly.
