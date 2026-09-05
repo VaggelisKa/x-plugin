@@ -187,3 +187,20 @@ test('all three post tools are discoverable as read-only and execute through MCP
   assert.ok(invalid.error || invalid.result?.isError);
   assert.equal(calls.length, 3);
 });
+
+test('errors-only X responses fail MCP calls while partial results remain available', async () => {
+  for (const data of [undefined, [], [{ id: '123' }]]) {
+    const client = new XClient(
+      async () => 'token',
+      false,
+      async () => Response.json({ data, errors: [{ title: 'Unavailable' }] }),
+    );
+    const result = await rpc(
+      createMcpHandler(() => createServer(client)),
+      'tools/call',
+      { name: 'x_search_posts', arguments: { query: 'test' } },
+    );
+    assert.equal(Boolean(result.result.isError), !data?.length);
+    assert.match(JSON.stringify(result), /Unavailable/);
+  }
+});

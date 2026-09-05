@@ -100,6 +100,16 @@ test('OAuth callback rejects wrong state, then exchanges the valid code once', a
     notify,
   );
   const authUrl = new URL(await ready);
+  const { request: rawRequest } = await import('node:http');
+  const malformed = await new Promise((resolve, reject) => {
+    const req = rawRequest({ hostname: '127.0.0.1', port: 8787, path: 'http://[' }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  assert.equal(malformed, 400);
   const callback = new URL('http://127.0.0.1:8787/callback?code=test-code&state=wrong');
   assert.equal((await fetch(callback)).status, 400);
   assert.equal(calls, 0);
@@ -181,4 +191,96 @@ test('rate-limit errors preserve retry information without reflecting private re
     client.me(),
     (e) => e.status === 429 && e.retryAfter === '60' && !e.message.includes('secret'),
   );
+});
+
+test('credential store rejects insecure permissions, symlinks, and malformed tokens', async (t) => {
+  const { chmod, symlink, unlink, writeFile } = await import('node:fs/promises');
+  const store = await storeFor(t);
+  await store.write(fixture);
+  const path = join(store.directory, 'credentials.json');
+  if (process.platform !== 'win32') {
+    await chmod(path, 0o644);
+    await assert.rejects(store.read(), /insecure/);
+    await chmod(path, 0o600);
+    await chmod(store.directory, 0o755);
+    await assert.rejects(store.read(), /secure credential directory/);
+    await chmod(store.directory, 0o700);
+    await unlink(path);
+    await writeFile(join(store.directory, 'target'), JSON.stringify(fixture), { mode: 0o600 });
+    await symlink(join(store.directory, 'target'), path);
+    await assert.rejects(store.read(), /credentials/);
+    await unlink(path);
+  }
+  await writeFile(path, JSON.stringify({ ...fixture, refreshToken: 123 }), { mode: 0o600 });
+  await assert.rejects(store.read(), /Invalid/);
+});
+
+test('OAuth releases its lock when authorization display fails', async (t) => {
+  const store = await storeFor(t);
+  await assert.rejects(
+    login(store, 'client', false, fetch, () => {
+      throw new Error('private');
+    }),
+    /Could not open/,
+  );
+  await store.locked(async () => {});
+});
+
+test(
+  'OAuth completes even if browser disconnects during token exchange',
+  { timeout: 5000 },
+  async (t) => {
+    const { get } = await import('node:http');
+    const store = await storeFor(t);
+    const ready = Promise.withResolvers();
+    const exchange = Promise.withResolvers();
+    const started = Promise.withResolvers();
+    const done = login(
+      store,
+      'client',
+      false,
+      async () => {
+        started.resolve();
+        return exchange.promise;
+      },
+      ready.resolve,
+    );
+    const state = new URL(await ready.promise).searchParams.get('state');
+    const req = get(`http://127.0.0.1:8787/callback?code=ok&state=${state}`);
+    req.on('error', () => {});
+    await started.promise;
+    req.destroy();
+    exchange.resolve(
+      Response.json({ access_token: 'connected', token_type: 'Bearer', expires_in: 3600 }),
+    );
+    await done;
+    await store.locked(async () => {});
+    assert.equal((await store.read()).accessToken, 'connected');
+  },
+);
+
+test('bounded upstream bodies cancel oversized streams and redact send failures', async () => {
+  const { readJson } = await import('../dist/body.js');
+  let cancelled = false;
+  const body = new ReadableStream({
+    pull(c) {
+      c.enqueue(new Uint8Array(128));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  await assert.rejects(readJson(new Response(body), 64));
+  assert.equal(cancelled, true);
+  let calls = 0;
+  const client = new XClient(
+    async () => 'token',
+    true,
+    async () => {
+      calls++;
+      return Response.json({});
+    },
+  );
+  await assert.rejects(client.send('123', 'hello'), /delivery is unknown/);
+  assert.equal(calls, 1);
 });

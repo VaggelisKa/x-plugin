@@ -167,3 +167,11 @@ npm pack --dry-run
 Tests use synthetic tokens and mocked X responses. Stdio tests spawn the actual CLI and exercise both modern metadata and legacy initialization. HTTP tests exercise loopback authentication and a real transport request. CI runs on Node 22 and 24.
 
 See [architecture](docs/architecture.md) for boundaries and protocol decisions, and [contributing](CONTRIBUTING.md) for the contribution workflow. MIT licensed; not affiliated with X, Anthropic, or OpenAI.
+
+## Request and credential safeguards
+
+HTTP mode accepts JSON POST requests up to 128 KiB, including chunked uploads, with a 15-second body deadline. X response bodies are limited to 2 MiB and OAuth responses to 64 KiB. Reduce page size if a large response exceeds the limit.
+
+Credential directories must be real, owner-only directories (0700 on POSIX); credential files must be regular, owner-only files (0600). Existing insecure permissions are rejected rather than silently changed. Tokens remain plaintext on disk; Windows ACL protection is not yet verified.
+
+Responses containing only X errors are flagged as failed MCP calls. Partial results retain their errors. A DM response without a valid delivery receipt is treated as unknown delivery and must not trigger an automatic resend. See [the adversarial review](docs/security-review.md) for findings and test coverage.

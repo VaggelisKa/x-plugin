@@ -1,3 +1,4 @@
+import { readJson } from './body.js';
 import {
   searchPostsSchema,
   getPostSchema,
@@ -79,9 +80,19 @@ export class XClient {
       );
     }
     try {
-      const result: unknown = await response.json();
+      const result = await readJson(response);
       if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error();
-      return result as Record<string, unknown>;
+      const data = result as Record<string, unknown>;
+      if (writing) {
+        const receipt = data.data as Record<string, unknown> | undefined;
+        if (
+          !receipt ||
+          typeof receipt.dm_event_id !== 'string' ||
+          !/^\d+$/.test(receipt.dm_event_id)
+        )
+          throw new Error();
+      }
+      return data;
     } catch {
       throw new XError(
         writing
@@ -141,9 +152,17 @@ export class XClient {
   messages(page: Page = {}, conversationId?: string, participantId?: string) {
     if (conversationId && participantId)
       throw new XError('Specify either a conversation or participant, not both.');
-    if (conversationId && !/^\d+(?:-\d+)?$/.test(conversationId))
+    if (conversationId && !/^\d{1,19}(?:-\d{1,19})?$/.test(conversationId))
       throw new XError('Invalid conversation ID.');
-    if (participantId && !/^\d+$/.test(participantId)) throw new XError('Invalid participant ID.');
+    if (participantId && !/^\d{1,19}$/.test(participantId))
+      throw new XError('Invalid participant ID.');
+    if (
+      page.pagination_token !== undefined &&
+      (typeof page.pagination_token !== 'string' ||
+        !page.pagination_token.length ||
+        page.pagination_token.length > 4096)
+    )
+      throw new XError('Invalid pagination token.');
     const limit = page.max_results ?? 20;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100)
       throw new XError('max_results must be 1–100.');
@@ -160,7 +179,7 @@ export class XClient {
     });
   }
   send(participantId: string, text: string) {
-    if (!/^\d+$/.test(participantId)) throw new XError('Invalid participant ID.');
+    if (!/^\d{1,19}$/.test(participantId)) throw new XError('Invalid participant ID.');
     if (!text.trim() || [...text].length > 10_000)
       throw new XError('Message must contain 1–10,000 characters.');
     return this.call(`dm_conversations/with/${participantId}/messages`, {}, text);

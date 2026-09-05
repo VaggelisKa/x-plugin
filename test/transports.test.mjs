@@ -131,3 +131,54 @@ test('HTTP requires separate authentication, rejects hostile origins, and serves
   assert.equal(calls, 1);
   assert.equal(response.headers.get('Mcp-Session-Id'), null);
 });
+
+test('HTTP rejects oversized fixed and chunked bodies before invoking X', async (t) => {
+  const { request } = await import('node:http');
+  let calls = 0;
+  const secret = 's'.repeat(40);
+  const server = startHttp(
+    new XClient(
+      async () => 'token',
+      false,
+      async () => {
+        calls++;
+        return Response.json({});
+      },
+    ),
+    secret,
+    0,
+  );
+  await once(server, 'listening');
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const url = `http://127.0.0.1:${server.address().port}/mcp`;
+  const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' };
+  assert.equal(
+    (await fetch(url, { method: 'POST', headers, body: 'x'.repeat(131073) })).status,
+    413,
+  );
+  const status = await new Promise((resolve, reject) => {
+    const req = request(url, { method: 'POST', headers }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.write('x'.repeat(100000));
+    req.end('x'.repeat(40000));
+  });
+  assert.equal(status, 413);
+  assert.equal((await fetch(url, { method: 'POST', headers, body: '{' })).status, 400);
+  assert.equal(
+    (
+      await fetch(url, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'text/plain' },
+        body: '{}',
+      })
+    ).status,
+    415,
+  );
+  assert.equal(calls, 0);
+});
