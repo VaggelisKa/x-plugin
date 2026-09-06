@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.tgz
+coverage/
+credentials*.json
+credentials*.tmp
+auth.lock/

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "x": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/runtime/x-plugin.cjs",
+        "serve"
+      ]
+    }
+  }
+}

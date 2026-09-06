@@ -1,0 +1,10 @@
+node_modules
+dist
+package-lock.json
+plugins/x-plugin/.claude-plugin/plugin.json
+plugins/x-plugin/.codex-plugin/plugin.json
+plugins/x-plugin/.mcp.json
+plugins/x-plugin/runtime/
+plugins/x-plugin/THIRD_PARTY_NOTICES.md
+.claude-plugin/marketplace.json
+.agents/plugins/marketplace.json

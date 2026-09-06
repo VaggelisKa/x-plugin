@@ -1,0 +1,11 @@
+{
+  "name": "x-plugin",
+  "version": "0.1.0",
+  "description": "Connect your X account to your agent: search posts, read DMs, draft replies, and optionally send messages.",
+  "author": {
+    "name": "VaggelisKa"
+  },
+  "repository": "https://github.com/VaggelisKa/x-plugin",
+  "license": "MIT",
+  "skills": "./skills/"
+}
