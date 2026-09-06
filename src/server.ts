@@ -35,7 +35,7 @@ export function createServer(client: XClient) {
           ? { error: error.message, status: error.status, retry_after: error.retryAfter }
           : {
               error:
-                'Unexpected failure. Check local setup; private error details were suppressed.',
+                'Unexpected failure. Check the plugin connection; private error details were suppressed.',
             };
       return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
     }

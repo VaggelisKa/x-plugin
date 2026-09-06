@@ -62,7 +62,7 @@ export class XClient {
     }
     if (!response.ok) {
       const hints: Record<number, string> = {
-        401: 'X authorization expired or was revoked. Run x-plugin auth login again.',
+        401: 'X authorization expired or was revoked. Reconnect X in your host; local CLI users can run x-plugin auth login.',
         402: 'X API credits are required. Check your developer account billing.',
         403: 'X denied access. Check app permissions, OAuth scopes, and account access.',
         429: 'X rate limit reached. Wait before retrying.',

@@ -127,12 +127,20 @@ export async function tokenRequest(
   clientId: string,
   params: Record<string, string>,
   request: Fetch = fetch,
+  clientSecret?: string,
 ): Promise<Credentials> {
   let response: Response;
   try {
     response = await request('https://api.x.com/2/oauth2/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(clientSecret
+          ? {
+              Authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString('base64')}`,
+            }
+          : {}),
+      },
       body: new URLSearchParams({ client_id: clientId, ...params }),
       redirect: 'error',
       signal: AbortSignal.timeout(20_000),

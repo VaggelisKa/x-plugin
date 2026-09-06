@@ -1,8 +1,20 @@
 # X Plugin
 
-Connect your X account to Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
+Connect your X account to ChatGPT through the hosted Vercel service, or use the local plugin with Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
 
 **Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; live X authorization and actual Claude Code/Codex sessions have not yet been verified. No package has been published to npm.
+
+## ChatGPT hosted setup
+
+The Vercel service provides a public HTTPS MCP endpoint, browser-based X authorization,
+encrypted per-connection credentials in Upstash Redis, refresh rotation, and revocation.
+It runs without a user's computer. Follow the [hosted deployment and ChatGPT connection guide](docs/hosted-vercel.md).
+
+**Hosted implementation is under verification.** Deployment requires an X OAuth Web App,
+Vercel environment configuration, and a dedicated Redis database. Hosted sending is disabled.
+Live X login and ChatGPT connection are not yet verified. Merging code alone does not
+install a ChatGPT connection or publish a directory listing. The installation instructions
+below are an alternative for local agent clients.
 
 ## Install as a plugin
 
@@ -175,7 +187,7 @@ x-plugin serve --http
 
 Endpoint: `http://127.0.0.1:8788/mcp`. Configure the client to send `Authorization: Bearer <X_MCP_HTTP_TOKEN>` through its secret/environment settings. Do not use an X access token here. `X_MCP_PORT` overrides the port.
 
-The server validates Host/Origin and binds only to `127.0.0.1`. This transport is **not a public hosted connector**. Multi-user hosting and browser-based ChatGPT/Claude connections require a separate MCP OAuth resource server and per-user token storage, planned as follow-up work.
+The server validates Host/Origin and binds only to `127.0.0.1`. This transport is **not a public hosted connector**. Multi-user hosting uses the separate [hosted OAuth service](docs/hosted-vercel.md); do not expose this local transport publicly.
 
 ## Privacy and credentials
 
