@@ -9,6 +9,8 @@ import {
   CLAUDE_CODE_CLIENT,
   CLAUDE_REDIRECT,
   hash,
+  redirectMatches,
+  registrable,
 } from '../dist/hosted/oauth.js';
 import { createHostedHandler, hostedHandler } from '../dist/hosted/handler.js';
 import { hostedConfig } from '../dist/hosted/config.js';
@@ -48,6 +50,7 @@ function setup(overrides = {}) {
   const vault = new Vault(store, config.encryptionKey, hash(config.origin));
   const calls = [];
   let refreshFail = false;
+  let refreshStatus = 0;
   const request = async (input, options = {}) => {
     const url = String(input);
     calls.push({ url, options });
@@ -72,6 +75,8 @@ function setup(overrides = {}) {
       const params = new URLSearchParams(options.body);
       if (params.get('grant_type') === 'refresh_token' && refreshFail)
         throw new Error('private upstream details');
+      if (params.get('grant_type') === 'refresh_token' && refreshStatus)
+        return new Response('{"error":"private upstream details"}', { status: refreshStatus });
       const user = params.get('code') ?? params.get('refresh_token').split('-')[1];
       return Response.json({
         access_token: `access-${user}`,
@@ -142,6 +147,9 @@ function setup(overrides = {}) {
     failRefresh: () => {
       refreshFail = true;
     },
+    failRefreshWith: (status) => {
+      refreshStatus = status;
+    },
   };
 }
 
@@ -203,22 +211,41 @@ test('hosted consent, callback and token exchange work through HTTP with browser
   assert.ok(!JSON.stringify([...s.store.records.values()]).includes('access-101'));
 });
 
-test('rejects untrusted clients, redirects, scopes, resources and duplicated parameters before outbound requests', async () => {
+test('rejects untrusted clients and redirects before outbound requests; later errors return to the client', async () => {
   for (const changes of [
     { client_id: 'http://127.0.0.1/client' },
     { redirect_uri: 'https://evil.example' },
-    { resource: 'https://other/mcp' },
-    { scope: 'dm.write' },
-    { code_challenge_method: 'plain' },
+    { redirect_uri: 'javascript:alert(1)' },
   ]) {
     const s = setup();
     await assert.rejects(s.oauth.begin(s.params(changes)));
     assert.equal(s.calls.length, 0);
   }
+  for (const [changes, error] of [
+    [{ resource: 'https://other/mcp' }, 'invalid_target'],
+    [{ scope: 'dm.write' }, 'invalid_scope'],
+    [{ code_challenge_method: 'plain' }, 'invalid_request'],
+    [{ response_type: 'token' }, 'unsupported_response_type'],
+  ]) {
+    const s = setup();
+    const result = await s.oauth.begin(s.params(changes));
+    const target = new URL(result.redirect);
+    assert.equal(target.origin + target.pathname, CHATGPT_REDIRECT);
+    assert.equal(target.searchParams.get('error'), error);
+    assert.equal(target.searchParams.get('state'), 'chatgpt-state');
+    assert.equal(target.searchParams.get('iss'), s.config.origin);
+    assert.ok(![...s.store.records.keys()].some((k) => k.includes(':consent:')));
+    const http = await s.handler(
+      new Request(`${s.config.origin}/oauth/authorize?${s.params(changes)}`),
+    );
+    assert.equal(http.status, 303);
+  }
   const s = setup(),
     params = s.params();
   params.append('state', 'duplicate');
-  await assert.rejects(s.oauth.begin(params));
+  const duplicate = new URL((await s.oauth.begin(params)).redirect);
+  assert.equal(duplicate.searchParams.get('error'), 'invalid_request');
+  assert.equal(duplicate.searchParams.has('state'), false);
 });
 
 test('wrong browser cannot consume consent or X state; callbacks are single-use', async () => {
@@ -498,7 +525,7 @@ test('hosted Claude registers dynamically as a public client with the fixed call
     state: 'claude-state',
   };
   const begin = await s.oauth.begin(s.params(changes));
-  assert.equal(begin.clientName, 'Claude');
+  assert.equal(begin.clientName, 'Claude (unverified client)');
   assert.equal(begin.loopback, false);
   const consent = new URL(await s.oauth.consent(begin.flowId, begin.browser));
   const result = new URL(
@@ -552,4 +579,76 @@ test('OAuth routes are limited per client address before the deployment ceiling'
     }),
   );
   assert.equal(other.status, 400);
+});
+
+test('loopback redirects match on host and path only; registration accepts nothing else', () => {
+  const loopback = 'http://localhost/callback';
+  for (const requested of [
+    'http://localhost/callback',
+    'http://localhost:3118/callback',
+    'http://localhost:65535/callback',
+  ])
+    assert.ok(redirectMatches(loopback, requested), requested);
+  for (const requested of [
+    'http://localhost.evil.com/callback',
+    'http://localhost.evil.com:80/callback',
+    'http://user@localhost/callback',
+    'http://localhost:3118/callback/',
+    'http://localhost:3118/other',
+    'http://localhost:3118/callback?x=1',
+    'http://localhost:3118/callback#x',
+    'https://localhost/callback',
+    'http://127.0.0.1:3118/callback',
+    'http://[::1]:3118/callback',
+    'http://evil.example/callback',
+    'javascript:alert(1)',
+    '',
+  ])
+    assert.equal(redirectMatches(loopback, requested), false, requested);
+  assert.ok(redirectMatches('http://127.0.0.1/callback', 'http://127.0.0.1:4242/callback'));
+  assert.ok(redirectMatches('http://[::1]/callback', 'http://[::1]:4242/callback'));
+  assert.ok(redirectMatches(CLAUDE_REDIRECT, CLAUDE_REDIRECT));
+  assert.equal(redirectMatches(CLAUDE_REDIRECT, `${CLAUDE_REDIRECT}/`), false);
+  for (const redirect of [CLAUDE_REDIRECT, CHATGPT_REDIRECT, 'http://[::1]:5/callback'])
+    assert.ok(registrable(redirect), redirect);
+  for (const redirect of ['https://claude.ai/other', 'https://evil.example/', 'not a url'])
+    assert.equal(registrable(redirect), false, redirect);
+});
+
+test('registered client names are labeled unverified on the consent page', async () => {
+  const s = setup();
+  const { client_id } = await s.oauth.register({
+    client_name: 'ChatGPT',
+    redirect_uris: ['http://localhost/callback'],
+  });
+  const page = await (
+    await s.handler(
+      new Request(
+        `${s.config.origin}/oauth/authorize?${s.params({ client_id, redirect_uri: 'http://localhost:9/callback' })}`,
+      ),
+    )
+  ).text();
+  assert.match(page, /Connect X to ChatGPT \(unverified client\)/);
+  assert.match(page, /Warning/);
+});
+
+test('X outages during refresh keep the grant; only rejected refreshes require reconnecting', async () => {
+  const s = setup(),
+    tokens = await s.connect();
+  const { grantId, client } = await s.oauth.authenticate(tokens.access_token);
+  const key = `grant:${grantId}`,
+    record = await s.vault.read(key);
+  await s.vault.replace(
+    key,
+    record.raw,
+    { ...record.value, credentials: { ...record.value.credentials, expiresAt: 0 } },
+    3600,
+  );
+  s.failRefreshWith(503);
+  await assert.rejects(client.me(), (error) => error.status === 503);
+  const kept = await s.vault.read(key);
+  assert.ok(kept && !kept.value.refreshing);
+  s.failRefreshWith(400);
+  await assert.rejects(client.me(), (error) => /Reconnect/.test(error.message));
+  assert.equal(await s.vault.read(key), null);
 });

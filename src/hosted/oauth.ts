@@ -56,7 +56,7 @@ function parseUrl(value: string): URL | undefined {
 function loopback(url: URL) {
   return (
     url.protocol === 'http:' &&
-    (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]') &&
     url.pathname === '/callback' &&
     !url.search &&
     !url.hash &&
@@ -74,7 +74,7 @@ export function redirectMatches(registered: string, requested: string) {
   );
 }
 /** Redirects a dynamically registered client may declare. */
-function registrable(redirect: string) {
+export function registrable(redirect: string) {
   const url = parseUrl(redirect);
   return Boolean(url && (HOSTED_REDIRECTS.includes(redirect) || loopback(url)));
 }
@@ -100,6 +100,15 @@ type Code = Flow & { grant: string };
 type Grant = { credentials: Credentials; userId: string; expires: number; refreshing?: boolean };
 type Token = { grant: string; clientId: string; resource: string; expires: number; used?: boolean };
 type Client = { name: string; redirects: string[]; expires: number };
+export type Begun =
+  | { redirect: string }
+  | {
+      flowId: string;
+      browser: string;
+      clientName: string;
+      redirectHost: string;
+      loopback: boolean;
+    };
 export type Registration = {
   client_id: string;
   client_id_issued_at: number;
@@ -208,7 +217,8 @@ export class HostedOAuth {
         record.value.redirects.some((r) => redirectMatches(r, redirect)),
         'invalid_request',
       );
-      return record.value.name;
+      // Registered names are self-declared; never let them impersonate a verified client.
+      return `${record.value.name} (unverified client)`;
     }
     assert(Object.hasOwn(CIMD_CLIENTS, clientId), 'invalid_client');
     // Cheap allowlist first: never fetch on behalf of an unacceptable redirect.
@@ -230,19 +240,30 @@ export class HostedOAuth {
     );
     return clientName(doc.client_name, CIMD_CLIENTS[clientId]!);
   }
-  async begin(params: URLSearchParams) {
+  /** Errors found after the client and redirect are verified go back to the client (RFC 6749 §4.1.2.1). */
+  async begin(params: URLSearchParams): Promise<Begun> {
     const clientId = one(params, 'client_id'),
       redirect = one(params, 'redirect_uri');
-    assert(one(params, 'response_type') === 'code');
-    assert(one(params, 'code_challenge_method') === 'S256');
-    const challenge = one(params, 'code_challenge');
-    assert(/^[A-Za-z0-9_-]{43}$/.test(challenge));
-    const resource = one(params, 'resource');
-    assert(!resource || resource === this.resource, 'invalid_target');
-    const scope = one(params, 'scope');
-    assert(scopeAllowed(scope), 'invalid_scope');
-    const state = one(params, 'state');
     const name = await this.client(clientId, redirect);
+    let challenge = '',
+      state = '';
+    try {
+      state = one(params, 'state');
+      assert(one(params, 'response_type') === 'code', 'unsupported_response_type');
+      assert(one(params, 'code_challenge_method') === 'S256');
+      challenge = one(params, 'code_challenge');
+      assert(/^[A-Za-z0-9_-]{43}$/.test(challenge));
+      const resource = one(params, 'resource');
+      assert(!resource || resource === this.resource, 'invalid_target');
+      assert(scopeAllowed(one(params, 'scope')), 'invalid_scope');
+    } catch (error) {
+      if (!(error instanceof OAuthError) || error.status !== 400) throw error;
+      const target = new URL(redirect);
+      if (state) target.searchParams.set('state', state);
+      target.searchParams.set('iss', this.config.origin);
+      target.searchParams.set('error', error.code);
+      return { redirect: target.toString() };
+    }
     const flowId = random(),
       browser = random();
     const flow: Flow = {
@@ -493,7 +514,16 @@ export class HostedOAuth {
       )
         throw new Error('Grant was revoked.');
       return next.accessToken;
-    } catch {
+    } catch (error) {
+      const status = error instanceof XError ? error.status : undefined;
+      if (status !== undefined && (status >= 500 || status === 429)) {
+        // X rejected the request outright, so the refresh token is unchanged: keep the grant.
+        await this.vault.replace(key, sealed, record.value, this.ttl(expires));
+        throw new XError(
+          'X is temporarily unavailable; the connection remains valid. Retry later.',
+          status,
+        );
+      }
       await this.vault.replace(key, sealed, null, 1);
       throw new XError(
         'X authorization could not be refreshed. Reconnect X through the plugin connection settings.',

@@ -151,6 +151,7 @@ export async function tokenRequest(
   if (!response.ok)
     throw new XError(
       `X token exchange failed (HTTP ${response.status}). Check your Native App client ID and callback URL; reauthorize if needed.`,
+      response.status,
     );
   let t: Record<string, unknown>;
   try {
