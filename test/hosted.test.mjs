@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { Vault, RedisStore } from '../dist/hosted/store.js';
-import { HostedOAuth, CHATGPT_CLIENT, CHATGPT_REDIRECT, hash } from '../dist/hosted/oauth.js';
+import {
+  HostedOAuth,
+  CHATGPT_CLIENT,
+  CHATGPT_REDIRECT,
+  CLAUDE_CODE_CLIENT,
+  CLAUDE_REDIRECT,
+  hash,
+} from '../dist/hosted/oauth.js';
 import { createHostedHandler, hostedHandler } from '../dist/hosted/handler.js';
 import { hostedConfig } from '../dist/hosted/config.js';
 
@@ -44,6 +51,13 @@ function setup(overrides = {}) {
   const request = async (input, options = {}) => {
     const url = String(input);
     calls.push({ url, options });
+    if (url === CLAUDE_CODE_CLIENT)
+      return Response.json({
+        client_id: CLAUDE_CODE_CLIENT,
+        client_name: 'Claude Code',
+        redirect_uris: ['http://localhost/callback', 'http://127.0.0.1/callback'],
+        token_endpoint_auth_method: 'none',
+      });
     if (url === CHATGPT_CLIENT)
       return Response.json({
         client_id: CHATGPT_CLIENT,
@@ -381,4 +395,145 @@ test('configuration fails closed and storage failures never disclose credentials
     Response.json({ error: 'private-secret' }),
   );
   await assert.rejects(store.get('key'), (error) => !error.message.includes('private-secret'));
+});
+
+test('Claude Code connects through its client metadata document with an ephemeral loopback port', async () => {
+  const s = setup();
+  const changes = {
+    client_id: CLAUDE_CODE_CLIENT,
+    redirect_uri: 'http://localhost:3118/callback',
+    scope: 'x.read offline_access',
+    state: 'claude-code-state',
+  };
+  const start = await s.handler(
+    new Request(`${s.config.origin}/oauth/authorize?${s.params(changes)}`),
+  );
+  assert.equal(start.status, 200);
+  const page = await start.text();
+  assert.match(page, /Connect X to Claude Code/);
+  assert.match(page, /localhost:3118/);
+  assert.match(page, /Warning/);
+  const begin = await s.oauth.begin(s.params(changes));
+  const consent = new URL(await s.oauth.consent(begin.flowId, begin.browser));
+  const result = new URL(
+    await s.oauth.callback(
+      new URLSearchParams({ code: '101', state: consent.searchParams.get('state') }),
+      begin.browser,
+    ),
+  );
+  assert.equal(result.origin, 'http://localhost:3118');
+  assert.equal(result.searchParams.get('state'), 'claude-code-state');
+  const tokens = await s.oauth.exchange(
+    s.exchangeParams(result.searchParams.get('code'), {
+      client_id: CLAUDE_CODE_CLIENT,
+      redirect_uri: 'http://localhost:3118/callback',
+    }),
+  );
+  assert.ok(tokens.access_token);
+  const { client } = await s.oauth.authenticate(tokens.access_token);
+  assert.equal((await client.me()).data.id, '101');
+  // Ports differ per session, but host and path must still match exactly.
+  for (const redirect_uri of [
+    'http://localhost:3118/other',
+    'http://evil.example/callback',
+    'http://localhost:3118/callback?x=1',
+  ])
+    await assert.rejects(s.oauth.begin(s.params({ ...changes, redirect_uri })));
+});
+
+test('hosted Claude registers dynamically as a public client with the fixed callback only', async () => {
+  const s = setup();
+  const register = (metadata) =>
+    s.handler(
+      new Request(`${s.config.origin}/oauth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(metadata),
+      }),
+    );
+  const first = await register({
+    client_name: 'Claude',
+    redirect_uris: [CLAUDE_REDIRECT],
+    token_endpoint_auth_method: 'none',
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+  });
+  assert.equal(first.status, 201);
+  const registration = await first.json();
+  assert.match(registration.client_id, /^dcr-/);
+  assert.equal(registration.token_endpoint_auth_method, 'none');
+  assert.ok(!('client_secret' in registration));
+  const again = await (
+    await register({ client_name: 'Claude', redirect_uris: [CLAUDE_REDIRECT] })
+  ).json();
+  assert.equal(again.client_id, registration.client_id);
+  assert.equal([...s.store.records.keys()].filter((k) => k.includes(':client:')).length, 1);
+  for (const metadata of [
+    { redirect_uris: ['https://evil.example/callback'] },
+    { redirect_uris: [CLAUDE_REDIRECT], token_endpoint_auth_method: 'client_secret_post' },
+    { redirect_uris: [] },
+    { redirect_uris: [CLAUDE_REDIRECT], grant_types: ['client_credentials'] },
+    [],
+  ])
+    assert.equal((await register(metadata)).status, 400);
+  const changes = {
+    client_id: registration.client_id,
+    redirect_uri: CLAUDE_REDIRECT,
+    state: 'claude-state',
+  };
+  const begin = await s.oauth.begin(s.params(changes));
+  assert.equal(begin.clientName, 'Claude');
+  assert.equal(begin.loopback, false);
+  const consent = new URL(await s.oauth.consent(begin.flowId, begin.browser));
+  const result = new URL(
+    await s.oauth.callback(
+      new URLSearchParams({ code: '202', state: consent.searchParams.get('state') }),
+      begin.browser,
+    ),
+  );
+  assert.equal(result.origin + result.pathname, CLAUDE_REDIRECT);
+  const tokens = await s.oauth.exchange(
+    s.exchangeParams(result.searchParams.get('code'), {
+      client_id: registration.client_id,
+      redirect_uri: CLAUDE_REDIRECT,
+    }),
+  );
+  // Codes are bound to the registering client; ChatGPT cannot redeem Claude's code and vice versa.
+  const { code } = await s.flow('101');
+  await assert.rejects(
+    s.oauth.exchange(s.exchangeParams(code, { client_id: registration.client_id })),
+  );
+  const refreshed = await s.oauth.exchange(
+    new URLSearchParams({
+      client_id: registration.client_id,
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+    }),
+  );
+  assert.ok(refreshed.access_token);
+  await assert.rejects(
+    s.oauth.begin(s.params({ ...changes, redirect_uri: 'http://localhost:1234/callback' })),
+  );
+  await assert.rejects(s.oauth.begin(s.params({ ...changes, client_id: 'dcr-unknown' })));
+});
+
+test('OAuth routes are limited per client address before the deployment ceiling', async () => {
+  const s = setup();
+  const metadata = new Request(`${s.config.origin}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-real-ip': '203.0.113.9' },
+    body: new URLSearchParams({ grant_type: 'password' }),
+  });
+  let last;
+  for (let i = 0; i < 61; i++) last = await s.handler(metadata.clone());
+  assert.equal(last.status, 429);
+  assert.equal(last.headers.get('Retry-After'), '60');
+  const other = await s.handler(
+    new Request(`${s.config.origin}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-real-ip': '203.0.113.10' },
+      body: new URLSearchParams({ grant_type: 'password' }),
+    }),
+  );
+  assert.equal(other.status, 400);
 });

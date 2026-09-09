@@ -1,19 +1,19 @@
 # X Plugin
 
-Connect your X account to ChatGPT through the hosted Vercel service, or use the local plugin with Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
+Connect your X account to ChatGPT, claude.ai, or Claude Code through the hosted Vercel service, or use the local plugin with Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
 
 **Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; live X authorization and actual Claude Code/Codex sessions have not yet been verified. No package has been published to npm.
 
-## ChatGPT hosted setup
+## Hosted setup (ChatGPT, claude.ai, Claude Code)
 
 The Vercel service provides a public HTTPS MCP endpoint, browser-based X authorization,
 encrypted per-connection credentials in Upstash Redis, refresh rotation, and revocation.
-It runs without a user's computer. Follow the [hosted deployment and ChatGPT connection guide](docs/hosted-vercel.md).
+It runs without a user's computer or X developer app. ChatGPT and Claude Code connect with their published client metadata documents; claude.ai registers dynamically. Follow the [hosted deployment and connection guide](docs/hosted-vercel.md).
 
 **Hosted implementation is under verification.** Deployment requires an X OAuth Web App,
 Vercel environment configuration, and a dedicated Redis database. Hosted sending is disabled.
-Live X login and ChatGPT connection are not yet verified. Merging code alone does not
-install a ChatGPT connection or publish a directory listing. The installation instructions
+Live X login and client connections are not yet verified. Merging code alone does not
+install a connection or publish a directory listing. The installation instructions
 below are an alternative for local agent clients.
 
 ## Install as a plugin

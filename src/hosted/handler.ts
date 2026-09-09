@@ -1,10 +1,20 @@
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { createServer } from '../server.js';
 import { hostedConfig, type HostedConfig } from './config.js';
-import { HostedOAuth, OAuthError, one, hash } from './oauth.js';
+import { HostedOAuth, OAuthError, SCOPE, one, hash } from './oauth.js';
 import { RedisStore, Vault, type Store } from './store.js';
 
 const COOKIE = '__Host-x-plugin-login';
+/** Browser origins that may make cross-site requests to this service. */
+const CLIENT_ORIGINS = ['https://chatgpt.com', 'https://claude.ai', 'https://claude.com'];
+const OAUTH_ROUTES = [
+  '/oauth/register',
+  '/oauth/authorize',
+  '/oauth/consent',
+  '/oauth/x/callback',
+  '/oauth/token',
+  '/oauth/revoke',
+];
 const security = {
   'Cache-Control': 'no-store',
   Pragma: 'no-cache',
@@ -29,6 +39,11 @@ function escape(value: string) {
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
   );
+}
+/** Vercel sets x-real-ip from the connection; it is not client-controlled behind the platform. */
+function clientIp(request: Request) {
+  const ip = request.headers.get('x-real-ip') ?? '';
+  return /^[0-9a-fA-F.:]{1,45}$/.test(ip) ? ip : 'unknown';
 }
 async function body(request: Request, max: number): Promise<string> {
   if (
@@ -64,13 +79,23 @@ async function body(request: Request, max: number): Promise<string> {
     void reader.cancel().catch(() => {});
   }
 }
+function mediaType(request: Request) {
+  return request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+}
 async function form(request: Request) {
-  if (
-    request.headers.get('content-type')?.split(';')[0]?.trim() !==
-    'application/x-www-form-urlencoded'
-  )
+  if (mediaType(request) !== 'application/x-www-form-urlencoded')
     throw new OAuthError('unsupported_media_type', 415);
   return new URLSearchParams(await body(request, 16 * 1024));
+}
+async function json(request: Request, max: number): Promise<unknown> {
+  if (mediaType(request) !== 'application/json')
+    throw new OAuthError('unsupported_media_type', 415);
+  try {
+    return JSON.parse(await body(request, max));
+  } catch (error) {
+    if (error instanceof OAuthError) throw error;
+    throw new OAuthError('invalid_request');
+  }
 }
 function html(contents: string, headers?: HeadersInit) {
   return new Response(
@@ -84,16 +109,16 @@ function html(contents: string, headers?: HeadersInit) {
 export function createHostedHandler(config: HostedConfig, store: Store, request = fetch) {
   const vault = new Vault(store, config.encryptionKey, hash(config.origin));
   const oauth = new HostedOAuth(config, vault, request);
-  const challenge = `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource/mcp", scope="x.read"`;
+  const challenge = `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource/mcp", scope="${SCOPE}"`;
+  async function limited(scope: string, maximum: number) {
+    return !(await store.limit(vault.keyFor(`rate:${scope}`), maximum, 60));
+  }
   async function route(req: Request) {
     const url = new URL(req.url);
     // Canonical origin is configured, never inferred from forwarded headers.
     if (url.origin !== config.origin) throw new OAuthError('invalid_request');
-    if (
-      req.headers.get('origin') &&
-      req.headers.get('origin') !== config.origin &&
-      req.headers.get('origin') !== 'https://chatgpt.com'
-    )
+    const origin = req.headers.get('origin');
+    if (origin && origin !== config.origin && !CLIENT_ORIGINS.includes(origin))
       throw new OAuthError('invalid_origin', 403);
     const path = url.pathname;
     if (
@@ -110,12 +135,12 @@ export function createHostedHandler(config: HostedConfig, store: Store, request 
       return Response.json({
         resource: oauth.resource,
         authorization_servers: [config.origin],
-        scopes_supported: ['x.read'],
+        scopes_supported: [SCOPE],
         bearer_methods_supported: ['header'],
       });
     if (req.method === 'GET' && path === '/')
       return html(
-        '<h1>X Plugin</h1><p>Connect your X account from ChatGPT to search posts and read recent direct messages.</p><p>This version cannot send messages. Your X credentials are encrypted; message bodies are not stored by this service.</p><p>Connect using the MCP endpoint: <code>/mcp</code>.</p><p>To disconnect, remove the connection in ChatGPT and revoke X Plugin in your X account settings. Connections expire after 30 days.</p>',
+        '<h1>X Plugin</h1><p>Connect your X account to ChatGPT, Claude, or Claude Code to search posts and read recent direct messages.</p><p>This service cannot send messages. Your X credentials are encrypted; message bodies are not stored by this service.</p><p>Connect using the MCP endpoint: <code>/mcp</code>.</p><p>To disconnect, remove the connection in your assistant and revoke X Plugin in your X account settings. Connections expire after 30 days.</p>',
       );
     if (req.method === 'GET' && path === '/health') {
       await store.get(vault.keyFor('health'));
@@ -125,13 +150,10 @@ export function createHostedHandler(config: HostedConfig, store: Store, request 
       const bearer = req.headers.get('authorization')?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
       if (!bearer) throw new OAuthError('invalid_token', 401);
       const { client, grantId } = await oauth.authenticate(bearer);
-      if (!(await store.limit(vault.keyFor(`rate:mcp:${grantId}`), 60, 60)))
-        throw new OAuthError('rate_limited', 429);
+      if (await limited(`mcp:${grantId}`, 60)) throw new OAuthError('rate_limited', 429);
       if (req.method !== 'POST')
         return new Response(null, { status: 405, headers: { Allow: 'POST' } });
-      if (
-        req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json'
-      )
+      if (mediaType(req) !== 'application/json')
         throw new OAuthError('unsupported_media_type', 415);
       const text = await body(req, 128 * 1024);
       let parsed: unknown;
@@ -149,28 +171,29 @@ export function createHostedHandler(config: HostedConfig, store: Store, request 
         new Request(req.url, { method: 'POST', headers, body: text, signal: req.signal }),
       );
     }
+    if (!OAUTH_ROUTES.includes(path)) return new Response(null, { status: 404 });
+    // Per-address limits bound one abusive caller; the deployment ceiling bounds everyone.
     if (
-      ![
-        '/oauth/authorize',
-        '/oauth/consent',
-        '/oauth/x/callback',
-        '/oauth/token',
-        '/oauth/revoke',
-      ].includes(path)
+      (await limited(`oauth:${path}:${clientIp(req)}`, 60)) ||
+      (await limited(`oauth:${path}`, 600))
     )
-      return new Response(null, { status: 404 });
-    // A conservative deployment-wide ceiling also bounds anonymous authorization traffic.
-    if (!(await store.limit(vault.keyFor(`rate:oauth:${path}`), 60, 60)))
       throw new OAuthError('rate_limited', 429);
+    if (path === '/oauth/register' && req.method === 'POST')
+      return Response.json(await oauth.register(await json(req, 16 * 1024)), { status: 201 });
     if (path === '/oauth/authorize' && req.method === 'GET') {
-      const { flowId, browser } = await oauth.begin(url.searchParams);
+      const { flowId, browser, clientName, redirectHost, loopback } = await oauth.begin(
+        url.searchParams,
+      );
+      const warning = loopback
+        ? '<p><strong>Warning:</strong> the connection returns to an application on this computer. Continue only if you started this connection yourself.</p>'
+        : '';
       return html(
-        `<h1>Connect X to ChatGPT</h1><p>Allow ChatGPT to read your X profile, posts, and recent direct messages through X Plugin. Sending is disabled.</p><p>X credentials are stored encrypted for up to 30 days. Requested content is shared with ChatGPT. You can revoke access in X settings.</p><form method="post" action="/oauth/consent"><input type="hidden" name="flow" value="${escape(flowId)}"><button type="submit">Continue to X</button></form>`,
+        `<h1>Connect X to ${escape(clientName)}</h1><p>Allow <strong>${escape(clientName)}</strong> to read your X profile, posts, and recent direct messages through X Plugin. Sending is disabled.</p><p>After you approve on X, you will be returned to <code>${escape(redirectHost)}</code>.</p>${warning}<p>X credentials are stored encrypted for up to 30 days. Requested content is shared with ${escape(clientName)}. You can revoke access in X settings.</p><form method="post" action="/oauth/consent"><input type="hidden" name="flow" value="${escape(flowId)}"><button type="submit">Continue to X</button></form>`,
         { 'Set-Cookie': setCookie(browser) },
       );
     }
     if (path === '/oauth/consent' && req.method === 'POST') {
-      if (req.headers.get('origin') !== config.origin) throw new OAuthError('invalid_origin', 403);
+      if (origin !== config.origin) throw new OAuthError('invalid_origin', 403);
       const target = await oauth.consent(one(await form(req), 'flow'), cookie(req));
       return new Response(null, { status: 303, headers: { Location: target } });
     }

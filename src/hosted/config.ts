@@ -8,8 +8,8 @@ export type HostedConfig = {
   encryptionKey: string;
 };
 export function hostedConfig(env = process.env): HostedConfig {
-  function required(key: string) {
-    const value = env[key];
+  function required(key: string, fallback?: string) {
+    const value = env[key] ?? (fallback ? env[fallback] : undefined);
     if (!value?.trim()) throw new Error(`Missing ${key}`);
     return value;
   }
@@ -27,8 +27,8 @@ export function hostedConfig(env = process.env): HostedConfig {
     allowedUserIds,
     xClientId: required('X_CLIENT_ID'),
     xClientSecret: required('X_CLIENT_SECRET'),
-    redisUrl: required('UPSTASH_REDIS_REST_URL'),
-    redisToken: required('UPSTASH_REDIS_REST_TOKEN'),
+    redisUrl: required('UPSTASH_REDIS_REST_URL', 'KV_REST_API_URL'),
+    redisToken: required('UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_TOKEN'),
     encryptionKey: required('X_TOKEN_ENCRYPTION_KEY'),
   };
 }

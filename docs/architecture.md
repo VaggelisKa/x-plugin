@@ -1,6 +1,6 @@
 # Architecture
 
-X Plugin is a host-neutral MCP server and a shared DM workflow skill, with separate Claude Code and Codex manifests. Local clients use the CLI; ChatGPT uses the separate hosted OAuth service described in [hosted deployment](hosted-vercel.md). The hosted service is read-only and awaits live connection verification.
+X Plugin is a host-neutral MCP server and a shared DM workflow skill, with separate Claude Code and Codex manifests. Local clients use the CLI; ChatGPT, claude.ai, and Claude Code can instead use the separate hosted OAuth service described in [hosted deployment](hosted-vercel.md). The hosted service is read-only and awaits live connection verification.
 
 ## Boundaries
 
@@ -33,7 +33,7 @@ X Native App OAuth uses S256 PKCE and random state, a five-minute login deadline
 
 Store tokens atomically with 0600 permissions on POSIX. Refresh is serialized within a process and guarded across processes. Auth busy errors are retryable after the other operation finishes; do not silently delete a live lock. Native keychain storage and crash recovery are future improvements.
 
-MCP HTTP authentication uses a distinct user-configured secret. It is not X authorization, OAuth token passthrough, or an implementation of public MCP OAuth. The hosted service in `src/hosted/` provides separate resource discovery, ChatGPT client authorization, and isolated encrypted token storage. It does not expose the loopback adapter.
+MCP HTTP authentication uses a distinct user-configured secret. It is not X authorization, OAuth token passthrough, or an implementation of public MCP OAuth. The hosted service in `src/hosted/` provides separate resource discovery, allowlisted client authorization (ChatGPT and Claude Code metadata documents, public-client dynamic registration for claude.ai and loopback agents), and isolated encrypted token storage. It does not expose the loopback adapter.
 
 Sending is absent from the default tool catalog and rejected by the client unless explicitly enabled. The host handles user authorization; instructions alone are not an enforceable approval UI. Sending is annotated non-idempotent. No request is automatically retried, especially a send with unknown delivery.
 
