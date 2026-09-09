@@ -2,7 +2,7 @@
 
 Connect your X account to ChatGPT, claude.ai, or Claude Code through the hosted Vercel service, or use the local plugin with Claude Code, Codex, or another MCP client. Search posts, browse user timelines, read recent DMs, and draft replies with your agent. Sending is optional and disabled by default.
 
-**Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; live X authorization and actual Claude Code/Codex sessions have not yet been verified. No package has been published to npm.
+**Initial development version.** Built on the official MCP TypeScript SDK v2 and protocol revision `2026-07-28`, with SDK compatibility for older clients. Protocol tests pass; hosted X authorization and ChatGPT tool discovery have been verified. Actual Claude Code/Codex sessions still need live verification. No package has been published to npm.
 
 ## Hosted setup (ChatGPT, claude.ai, Claude Code)
 
@@ -12,7 +12,7 @@ It runs without a user's computer or X developer app. ChatGPT and Claude Code co
 
 **Hosted implementation is under verification.** Deployment requires an X OAuth Web App,
 Vercel environment configuration, and a dedicated Redis database. Hosted sending is disabled.
-Live X login and client connections are not yet verified. Merging code alone does not
+Live X login and discovery of all seven read-only tools in ChatGPT were verified on September 9, 2026. Claude client connections and live post/DM tool calls still need verification. Merging code alone does not
 install a connection or publish a directory listing. The installation instructions
 below are an alternative for local agent clients.
 

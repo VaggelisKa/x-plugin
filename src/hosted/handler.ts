@@ -231,6 +231,16 @@ export function createHostedHandler(config: HostedConfig, store: Store, request 
       if (status === 429) response.headers.set('Retry-After', '60');
     }
     for (const [key, value] of Object.entries(security)) response.headers.set(key, value);
+    // A no-referrer policy makes browsers send Origin: null on the consent form POST.
+    // Preserve its same-origin CSRF check without sending referrers to X or clients.
+    if (req.method === 'GET' && new URL(req.url).pathname === '/oauth/authorize' && response.ok) {
+      response.headers.set('Referrer-Policy', 'same-origin');
+      // Chromium also applies form-action to the consent POST's redirect to X.
+      response.headers.set(
+        'Content-Security-Policy',
+        "default-src 'none'; form-action 'self' https://x.com; frame-ancestors 'none'; base-uri 'none'",
+      );
+    }
     return response;
   };
 }

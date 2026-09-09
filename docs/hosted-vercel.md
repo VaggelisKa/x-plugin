@@ -5,7 +5,7 @@ The hosted service runs independently of a user's computer. ChatGPT, claude.ai
 their own plugin tokens through browser OAuth, and call the same seven read tools
 as the local plugin. No local X developer app is needed by the person connecting. Hosted sending is disabled,
 including when `X_ALLOW_WRITE` is set. This is the first hosted implementation;
-live X authorization and client installation must still be verified.
+live X authorization and ChatGPT installation were verified on September 9, 2026. Claude client installation and live post/DM tool calls still need verification.
 
 ## Deploy
 

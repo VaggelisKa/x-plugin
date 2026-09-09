@@ -1,6 +1,6 @@
 # Architecture
 
-X Plugin is a host-neutral MCP server and a shared DM workflow skill, with separate Claude Code and Codex manifests. Local clients use the CLI; ChatGPT, claude.ai, and Claude Code can instead use the separate hosted OAuth service described in [hosted deployment](hosted-vercel.md). The hosted service is read-only and awaits live connection verification.
+X Plugin is a host-neutral MCP server and a shared DM workflow skill, with separate Claude Code and Codex manifests. Local clients use the CLI; ChatGPT, claude.ai, and Claude Code can instead use the separate hosted OAuth service described in [hosted deployment](hosted-vercel.md). The hosted service is read-only. X authorization and ChatGPT tool discovery have been verified; Claude client connections still need live verification.
 
 ## Boundaries
 

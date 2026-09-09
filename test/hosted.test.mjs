@@ -149,9 +149,24 @@ test('hosted consent, callback and token exchange work through HTTP with browser
   const s = setup();
   const start = await s.handler(new Request(`${s.config.origin}/oauth/authorize?${s.params()}`));
   assert.equal(start.status, 200);
+  assert.equal(start.headers.get('Referrer-Policy'), 'same-origin');
+  assert.equal(
+    start.headers.get('Content-Security-Policy'),
+    "default-src 'none'; form-action 'self' https://x.com; frame-ancestors 'none'; base-uri 'none'",
+  );
   const cookie = start.headers.get('set-cookie').split(';')[0];
   assert.match(start.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
   const flow = (await start.text()).match(/name="flow" value="([^"]+)"/)[1];
+  for (const origin of ['null', 'https://evil.example']) {
+    const rejected = await s.handler(
+      new Request(`${s.config.origin}/oauth/consent`, {
+        method: 'POST',
+        headers: { cookie, origin, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ flow }),
+      }),
+    );
+    assert.equal(rejected.status, 403);
+  }
   const consent = await s.handler(
     new Request(`${s.config.origin}/oauth/consent`, {
       method: 'POST',
@@ -171,6 +186,7 @@ test('hosted consent, callback and token exchange work through HTTP with browser
     }),
   );
   assert.equal(callback.status, 303);
+  assert.equal(callback.headers.get('Referrer-Policy'), 'no-referrer');
   const target = new URL(callback.headers.get('location'));
   assert.equal(target.searchParams.get('iss'), s.config.origin);
   assert.equal(target.searchParams.get('state'), 'chatgpt-state');
