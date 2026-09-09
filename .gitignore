@@ -9,5 +9,3 @@ credentials*.json
 credentials*.tmp
 auth.lock/
 .vercel/
-.vercel
-.env*

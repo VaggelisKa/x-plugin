@@ -181,9 +181,10 @@ export function createHostedHandler(config: HostedConfig, store: Store, request 
     if (path === '/oauth/register' && req.method === 'POST')
       return Response.json(await oauth.register(await json(req, 16 * 1024)), { status: 201 });
     if (path === '/oauth/authorize' && req.method === 'GET') {
-      const { flowId, browser, clientName, redirectHost, loopback } = await oauth.begin(
-        url.searchParams,
-      );
+      const begun = await oauth.begin(url.searchParams);
+      if ('redirect' in begun)
+        return new Response(null, { status: 303, headers: { Location: begun.redirect } });
+      const { flowId, browser, clientName, redirectHost, loopback } = begun;
       const warning = loopback
         ? '<p><strong>Warning:</strong> the connection returns to an application on this computer. Continue only if you started this connection yourself.</p>'
         : '';
